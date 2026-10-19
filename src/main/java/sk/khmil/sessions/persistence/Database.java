@@ -45,9 +45,16 @@ public final class Database implements AutoCloseable {
     this.keepAlive = keepAlive;
   }
 
+  /**
+   * H2 closes databases in its own JVM shutdown hook by default. Shutdown hooks run concurrently,
+   * so that would race with our graceful shutdown on Ctrl+C; this class owns the lifecycle instead.
+   */
+  private static final String NO_AUTO_CLOSE = ";DB_CLOSE_ON_EXIT=FALSE";
+
   /** Opens the database at the given JDBC URL and creates the schema if it does not exist. */
-  public static Database open(String url) {
-    Objects.requireNonNull(url, "url");
+  public static Database open(String jdbcUrl) {
+    Objects.requireNonNull(jdbcUrl, "jdbcUrl");
+    String url = jdbcUrl.contains("DB_CLOSE_ON_EXIT") ? jdbcUrl : jdbcUrl + NO_AUTO_CLOSE;
     Database database;
     try {
       database = new Database(url, DriverManager.getConnection(url));
