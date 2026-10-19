@@ -58,14 +58,24 @@ class JdbcUserRepositoryTest {
   void statsCountSessionsAndModificationsPerUser() {
     repository.createSession("alice");
     repository.createSession("bob");
-    repository.addModification("bob");
-    repository.addModification("alice");
-    repository.addModification("alice");
+    repository.addModificationIfLoggedIn("bob");
+    repository.addModificationIfLoggedIn("alice");
+    repository.addModificationIfLoggedIn("alice");
 
     UserStats stats = repository.stats();
 
     assertEquals(UserStats.of(2, Map.of("alice", 2L, "bob", 1L)), stats);
     assertEquals("alice", stats.modificationsPerUser().firstKey());
+  }
+
+  @Test
+  void modificationIsRecordedOnlyForLoggedInUser() {
+    assertFalse(repository.addModificationIfLoggedIn("alice"));
+
+    repository.createSession("alice");
+
+    assertTrue(repository.addModificationIfLoggedIn("alice"));
+    assertEquals(UserStats.of(1, Map.of("alice", 1L)), repository.stats());
   }
 
   @Test
@@ -94,6 +104,6 @@ class JdbcUserRepositoryTest {
   void storageFailureIsWrappedInRepositoryException() {
     database.close();
 
-    assertThrows(RepositoryException.class, () -> repository.addModification("alice"));
+    assertThrows(RepositoryException.class, () -> repository.addModificationIfLoggedIn("alice"));
   }
 }

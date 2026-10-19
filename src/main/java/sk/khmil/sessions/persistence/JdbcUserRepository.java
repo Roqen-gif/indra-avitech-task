@@ -23,7 +23,8 @@ public final class JdbcUserRepository implements UserRepository {
       "INSERT INTO sessions (user_id, logged_in_at) VALUES (?, ?)";
   private static final String DELETE_SESSION = "DELETE FROM sessions WHERE user_id = ?";
   private static final String INSERT_MODIFICATION =
-      "INSERT INTO data_modifications (user_id, modified_at) VALUES (?, ?)";
+      "INSERT INTO data_modifications (user_id, modified_at)"
+          + " SELECT user_id, ? FROM sessions WHERE user_id = ?";
   private static final String COUNT_SESSIONS = "SELECT COUNT(*) FROM sessions";
   private static final String COUNT_MODIFICATIONS =
       "SELECT user_id, COUNT(*) FROM data_modifications GROUP BY user_id";
@@ -64,12 +65,12 @@ public final class JdbcUserRepository implements UserRepository {
   }
 
   @Override
-  public void addModification(String userId) {
+  public boolean addModificationIfLoggedIn(String userId) {
     try (Connection connection = database.connection();
         PreparedStatement statement = connection.prepareStatement(INSERT_MODIFICATION)) {
-      statement.setString(1, userId);
-      statement.setTimestamp(2, now());
-      statement.executeUpdate();
+      statement.setTimestamp(1, now());
+      statement.setString(2, userId);
+      return statement.executeUpdate() > 0;
     } catch (SQLException e) {
       throw new RepositoryException("Failed to record modification for " + userId, e);
     }
