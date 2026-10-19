@@ -1,5 +1,7 @@
 # User Sessions
 
+[![Build](https://github.com/Roqen-gif/indra-avitech-task/actions/workflows/build.yml/badge.svg)](https://github.com/Roqen-gif/indra-avitech-task/actions/workflows/build.yml)
+
 A console application in plain Java 21 (no frameworks) that reads commands from standard input, processes them asynchronously and stores the results in an embedded H2 database.
 
 ## Build and run
