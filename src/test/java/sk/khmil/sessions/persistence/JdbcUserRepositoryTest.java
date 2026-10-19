@@ -6,10 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -68,7 +64,7 @@ class JdbcUserRepositoryTest {
 
     UserStats stats = repository.stats();
 
-    assertEquals(UserStats.of(2, 2, Map.of("alice", 2L, "bob", 1L)), stats);
+    assertEquals(UserStats.of(2, Map.of("alice", 2L, "bob", 1L)), stats);
     assertEquals("alice", stats.modificationsPerUser().firstKey());
   }
 
@@ -79,28 +75,12 @@ class JdbcUserRepositoryTest {
     repository.createSession("alice");
 
     assertTrue(repository.addModificationIfLoggedIn("alice"));
-    assertEquals(UserStats.of(1, 1, Map.of("alice", 1L)), repository.stats());
-  }
-
-  @Test
-  void usersModifyingDataCountsOnlyModificationsInCurrentSession() {
-    MutableClock clock = new MutableClock(Instant.parse("2026-10-19T10:00:00Z"));
-    JdbcUserRepository timed = new JdbcUserRepository(database, clock);
-    timed.createSession("alice");
-    timed.addModificationIfLoggedIn("alice");
-    timed.createSession("bob");
-    timed.addModificationIfLoggedIn("bob");
-    clock.advance(Duration.ofMinutes(1));
-    timed.deleteSession("alice");
-    timed.createSession("alice");
-    timed.createSession("carol");
-
-    assertEquals(UserStats.of(3, 1, Map.of("alice", 1L, "bob", 1L)), timed.stats());
+    assertEquals(UserStats.of(1, Map.of("alice", 1L)), repository.stats());
   }
 
   @Test
   void statsOfEmptyDatabaseAreZero() {
-    assertEquals(UserStats.of(0, 0, Map.of()), repository.stats());
+    assertEquals(UserStats.of(0, Map.of()), repository.stats());
   }
 
   @Test
@@ -131,34 +111,5 @@ class JdbcUserRepositoryTest {
     database.close();
 
     assertThrows(RepositoryException.class, () -> repository.addModificationIfLoggedIn("alice"));
-  }
-
-  /** Clock that only moves when told to, so session boundaries are deterministic. */
-  private static final class MutableClock extends Clock {
-
-    private Instant now;
-
-    MutableClock(Instant start) {
-      this.now = start;
-    }
-
-    void advance(Duration duration) {
-      now = now.plus(duration);
-    }
-
-    @Override
-    public Instant instant() {
-      return now;
-    }
-
-    @Override
-    public ZoneId getZone() {
-      return ZoneOffset.UTC;
-    }
-
-    @Override
-    public Clock withZone(ZoneId zone) {
-      throw new UnsupportedOperationException();
-    }
   }
 }

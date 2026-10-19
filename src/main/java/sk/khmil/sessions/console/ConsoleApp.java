@@ -143,9 +143,6 @@ public final class ConsoleApp {
   static String format(UserStats stats) {
     StringBuilder text = new StringBuilder();
     text.append("Logged-in users: ").append(stats.loggedInUsers()).append(System.lineSeparator());
-    text.append("Users currently modifying data: ")
-        .append(stats.usersModifyingData())
-        .append(System.lineSeparator());
     text.append("Modifications per user:").append(System.lineSeparator());
     if (stats.modificationsPerUser().isEmpty()) {
       text.append("  (none)").append(System.lineSeparator());
