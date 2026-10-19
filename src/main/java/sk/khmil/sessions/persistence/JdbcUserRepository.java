@@ -22,6 +22,7 @@ public final class JdbcUserRepository implements UserRepository {
   private static final String INSERT_SESSION =
       "INSERT INTO sessions (user_id, logged_in_at) VALUES (?, ?)";
   private static final String DELETE_SESSION = "DELETE FROM sessions WHERE user_id = ?";
+  private static final String DELETE_ALL_SESSIONS = "DELETE FROM sessions";
   private static final String INSERT_MODIFICATION =
       "INSERT INTO data_modifications (user_id, modified_at)"
           + " SELECT user_id, ? FROM sessions WHERE user_id = ?";
@@ -73,6 +74,16 @@ public final class JdbcUserRepository implements UserRepository {
       return statement.executeUpdate() > 0;
     } catch (SQLException e) {
       throw new RepositoryException("Failed to record modification for " + userId, e);
+    }
+  }
+
+  @Override
+  public void deleteAllSessions() {
+    try (Connection connection = database.connection();
+        PreparedStatement statement = connection.prepareStatement(DELETE_ALL_SESSIONS)) {
+      statement.executeUpdate();
+    } catch (SQLException e) {
+      throw new RepositoryException("Failed to delete sessions", e);
     }
   }
 

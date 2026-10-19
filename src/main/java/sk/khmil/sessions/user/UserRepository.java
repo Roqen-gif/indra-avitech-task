@@ -29,6 +29,9 @@ public interface UserRepository {
    */
   boolean addModificationIfLoggedIn(String userId);
 
+  /** Ends all sessions, e.g. ones left over from a previous run. */
+  void deleteAllSessions();
+
   /** Returns a consistent snapshot of the current statistics. */
   UserStats stats();
 }

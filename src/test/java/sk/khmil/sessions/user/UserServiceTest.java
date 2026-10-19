@@ -94,4 +94,15 @@ class UserServiceTest {
 
     assertEquals(UserStats.of(1, Map.of("alice", 2L)), service.stats());
   }
+
+  @Test
+  void resetSessionsLogsEveryoneOutButKeepsModifications() {
+    service.login("alice");
+    service.modifyData("alice");
+
+    service.resetSessions();
+
+    assertEquals(UserStats.of(0, Map.of("alice", 1L)), service.stats());
+    assertTrue(service.login("alice").accepted());
+  }
 }

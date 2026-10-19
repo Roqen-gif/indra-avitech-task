@@ -37,6 +37,11 @@ public final class UserService {
         : Outcome.rejected("modification ignored, " + userId + " is not logged in");
   }
 
+  /** Ends all sessions; called on startup because a session belongs to one application run. */
+  public void resetSessions() {
+    repository.deleteAllSessions();
+  }
+
   /** Returns the current statistics. */
   public UserStats stats() {
     return repository.stats();

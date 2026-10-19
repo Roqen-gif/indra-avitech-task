@@ -4,7 +4,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.BrokenBarrierException;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -49,22 +48,13 @@ public final class CommandDispatcher {
   /**
    * Runs {@code action} once every worker has finished all tasks submitted before this call, while
    * all workers are paused. Tasks submitted afterwards run only once the action is done, so the
-   * action sees an exact point-in-time state. The calling thread does not wait.
-   *
-   * @return a future that completes when the action has run
+   * action sees an exact point-in-time state. The calling thread does not wait; a failure of the
+   * action is logged like any other task failure.
    */
-  public CompletableFuture<Void> runExclusively(Runnable action) {
+  public void runExclusively(Runnable action) {
     Objects.requireNonNull(action, "action");
-    CompletableFuture<Void> done = new CompletableFuture<>();
-    CyclicBarrier barrier =
-        new CyclicBarrier(
-            workers.size(),
-            () -> {
-              runSafely(action);
-              done.complete(null);
-            });
+    CyclicBarrier barrier = new CyclicBarrier(workers.size(), () -> runSafely(action));
     workers.forEach(worker -> worker.execute(() -> awaitBarrier(barrier)));
-    return done;
   }
 
   /**

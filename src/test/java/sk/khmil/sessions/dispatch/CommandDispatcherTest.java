@@ -102,12 +102,11 @@ class CommandDispatcherTest {
     for (int i = 0; i < 500; i++) {
       dispatcher.dispatch("user-" + i, counter::incrementAndGet);
     }
-    var done = dispatcher.runExclusively(() -> snapshot.set(counter.get()));
+    dispatcher.runExclusively(() -> snapshot.set(counter.get()));
     for (int i = 0; i < 500; i++) {
       dispatcher.dispatch("user-" + i, counter::incrementAndGet);
     }
 
-    done.join();
     assertTrue(dispatcher.shutdown(SHUTDOWN_TIMEOUT));
     assertEquals(500, snapshot.get());
     assertEquals(1_000, counter.get());
@@ -117,16 +116,23 @@ class CommandDispatcherTest {
   void failingExclusiveActionDoesNotBlockWorkers() {
     AtomicInteger completed = new AtomicInteger();
 
-    var done =
-        dispatcher.runExclusively(
-            () -> {
-              throw new IllegalStateException("boom");
-            });
+    dispatcher.runExclusively(
+        () -> {
+          throw new IllegalStateException("boom");
+        });
     dispatcher.dispatch("alice", completed::incrementAndGet);
 
-    done.join();
     assertTrue(dispatcher.shutdown(SHUTDOWN_TIMEOUT));
     assertEquals(1, completed.get());
+  }
+
+  @Test
+  void exclusiveActionRunsWithoutWaitingForShutdown() throws InterruptedException {
+    CountDownLatch actionRan = new CountDownLatch(1);
+
+    dispatcher.runExclusively(actionRan::countDown);
+
+    actionRan.await();
   }
 
   @Test
