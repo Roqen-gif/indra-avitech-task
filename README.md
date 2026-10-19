@@ -11,6 +11,8 @@ mvn clean package                         # build, static analysis, tests, cover
 java -jar target/user-sessions-1.0.0.jar  # run (data is stored in ./data/app.mv.db)
 ```
 
+For command history and arrow-key editing when typing by hand, wrap it with [rlwrap](https://github.com/hanslub42/rlwrap): `rlwrap java -jar target/user-sessions-1.0.0.jar`.
+
 An optional first argument overrides the JDBC URL, e.g. `java -jar target/user-sessions-1.0.0.jar jdbc:h2:mem:demo`.
 
 Example session:
@@ -87,7 +89,7 @@ STDIN ─► ConsoleApp ─► CommandParser ─► CommandDispatcher ─► Use
 | Question | Decision |
 |---|---|
 | Case sensitivity | Command names are case-insensitive (`login(alice)` works). User ids are case-sensitive (`alice` and `Alice` are different users). |
-| Valid user id | Any non-empty text without whitespace or parentheses. Whitespace around the argument is trimmed. |
+| Valid user id | 1-64 characters from the POSIX portable filename set (`A-Z a-z 0-9 . _ -`) plus one optional `@`, starting with a letter or digit. Names, emails and UUIDs work (`alice`, `john.doe@corp.sk`, `3f2b9c1e-…`). Control characters, terminal escape sequences and values longer than the database column are rejected by the parser with a `WARN`, before reaching the database. Whitespace around the argument is trimmed. |
 | "Users currently modifying data" | The task text is ambiguous here. I count **logged-in users who made at least one modification since their current login**. A user who modified data and then logged out (or logged in again without modifying) is not counted. |
 | "Modifications per user" | All recorded modifications per user, including earlier sessions and earlier runs (the history is persistent). Sorted by user id, uppercase before lowercase. |
 | `STATS()` semantics | Reflects **exactly** the commands entered before it. Every worker first finishes its earlier commands and then waits at a `CyclicBarrier`. The last worker to arrive runs the query while the others are paused, then all continue. Commands entered after `STATS()` are not included. The reader is never blocked. |
