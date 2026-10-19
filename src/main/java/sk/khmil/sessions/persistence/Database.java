@@ -11,7 +11,9 @@ import sk.khmil.sessions.user.RepositoryException;
  * Hands out JDBC connections and owns the schema.
  *
  * <p>Every caller gets its own {@link Connection} and must close it, so connections are never
- * shared between threads.
+ * shared between threads. One extra connection stays open for the lifetime of this object: an
+ * embedded H2 database closes when its last connection closes, and reopening the file for every
+ * operation would be slow.
  */
 public final class Database implements AutoCloseable {
 
@@ -35,14 +37,29 @@ public final class Database implements AutoCloseable {
 
   private final String url;
 
-  private Database(String url) {
-    this.url = Objects.requireNonNull(url, "url");
+  /** Never used for queries; it only keeps the embedded database open. */
+  private final Connection keepAlive;
+
+  private Database(String url, Connection keepAlive) {
+    this.url = url;
+    this.keepAlive = keepAlive;
   }
 
   /** Opens the database at the given JDBC URL and creates the schema if it does not exist. */
   public static Database open(String url) {
-    Database database = new Database(url);
-    database.createSchema();
+    Objects.requireNonNull(url, "url");
+    Database database;
+    try {
+      database = new Database(url, DriverManager.getConnection(url));
+    } catch (SQLException e) {
+      throw new RepositoryException("Failed to open database " + url, e);
+    }
+    try {
+      database.createSchema();
+    } catch (RepositoryException e) {
+      database.close();
+      throw e;
+    }
     return database;
   }
 
@@ -62,12 +79,20 @@ public final class Database implements AutoCloseable {
     }
   }
 
-  /** Shuts the embedded database down so all data is flushed before the process exits. */
+  /**
+   * Shuts the embedded database down so all data is flushed before the process exits. Calling it
+   * again has no effect.
+   */
   @Override
   public void close() {
-    try (Connection connection = connection();
-        Statement statement = connection.createStatement()) {
-      statement.execute("SHUTDOWN");
+    try {
+      if (keepAlive.isClosed()) {
+        return;
+      }
+      try (Connection connection = keepAlive;
+          Statement statement = connection.createStatement()) {
+        statement.execute("SHUTDOWN");
+      }
     } catch (SQLException e) {
       throw new RepositoryException("Failed to shut down database", e);
     }

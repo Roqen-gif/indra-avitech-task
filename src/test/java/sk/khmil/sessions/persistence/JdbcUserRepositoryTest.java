@@ -101,6 +101,12 @@ class JdbcUserRepositoryTest {
   }
 
   @Test
+  void closeIsIdempotent() {
+    database.close();
+    database.close();
+  }
+
+  @Test
   void storageFailureIsWrappedInRepositoryException() {
     database.close();
 
