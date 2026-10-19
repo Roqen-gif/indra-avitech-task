@@ -44,6 +44,7 @@ public final class Main {
               userService,
               new CommandDispatcher(workerCount),
               SHUTDOWN_TIMEOUT);
+      System.err.println(ConsoleApp.USAGE);
       app.run();
     }
   }

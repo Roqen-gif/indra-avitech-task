@@ -65,7 +65,14 @@ class ConsoleAppTest {
     assertTrue(output.contains("WARN: unknown command: FOO"), output);
     assertTrue(
         output.contains(
-            "Logged-in users: 1" + NL + "Modifications per user:" + NL + "  alice: 2" + NL),
+            "Logged-in users: 1"
+                + NL
+                + "Users currently modifying data: 1"
+                + NL
+                + "Modifications per user:"
+                + NL
+                + "  alice: 2"
+                + NL),
         output);
     assertTrue(output.contains("Shutting down..." + NL), output);
   }
@@ -75,7 +82,7 @@ class ConsoleAppTest {
     String output = run("LOGIN(alice)\nDATA_MODIFY(alice)\n");
 
     assertTrue(output.contains("Shutting down..." + NL), output);
-    assertEquals(UserStats.of(1, Map.of("alice", 1L)), userService.stats());
+    assertEquals(UserStats.of(1, 1, Map.of("alice", 1L)), userService.stats());
   }
 
   @Test
@@ -137,8 +144,15 @@ class ConsoleAppTest {
   @Test
   void formatShowsPlaceholderWhenThereAreNoModifications() {
     assertEquals(
-        "Logged-in users: 0" + NL + "Modifications per user:" + NL + "  (none)" + NL,
-        ConsoleApp.format(UserStats.of(0, Map.of())));
+        "Logged-in users: 0"
+            + NL
+            + "Users currently modifying data: 0"
+            + NL
+            + "Modifications per user:"
+            + NL
+            + "  (none)"
+            + NL,
+        ConsoleApp.format(UserStats.of(0, 0, Map.of())));
   }
 
   private String run(String script) {

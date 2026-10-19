@@ -17,6 +17,7 @@ Example session:
 
 ```text
 $ java -jar target/user-sessions-1.0.0.jar
+Commands: LOGIN(user_id), LOGOUT(user_id), DATA_MODIFY(user_id), STATS(), EXIT(). Ctrl+D also exits.
 LOGIN(alice)
 DATA_MODIFY(alice)
 DATA_MODIFY(alice)
@@ -28,6 +29,7 @@ FOO(1)
 WARN: unknown command: FOO
 STATS()
 Logged-in users: 1
+Users currently modifying data: 1
 Modifications per user:
   alice: 2
 EXIT()
@@ -43,10 +45,10 @@ One command per line, in the form `NAME(argument)`.
 | `LOGIN(user_id)` | starts a session | the user is already logged in |
 | `LOGOUT(user_id)` | ends the session | the user is not logged in |
 | `DATA_MODIFY(user_id)` | records one modification | the user is not logged in (ignored) |
-| `STATS()` | prints the number of logged-in users and modifications per user | — |
+| `STATS()` | prints the number of logged-in users, the number of users currently modifying data, and modifications per user | — |
 | `EXIT()` | processes all queued commands, closes resources and exits | — |
 
-Successful commands print nothing. Rejected commands and invalid input print a `WARN:` line and the application keeps running.
+Successful commands print nothing. Rejected commands and invalid input print a `WARN:` line and the application keeps running. A one-line usage hint is printed to standard error on start, so it is visible in a terminal but never mixes into redirected output.
 
 ## Architecture
 
@@ -83,6 +85,8 @@ STDIN ─► ConsoleApp ─► CommandParser ─► CommandDispatcher ─► Use
 |---|---|
 | Case sensitivity | Command names are case-insensitive (`login(alice)` works). User ids are case-sensitive (`alice` and `Alice` are different users). |
 | Valid user id | Any non-empty text without whitespace or parentheses. Whitespace around the argument is trimmed. |
+| "Users currently modifying data" | The task text is ambiguous here. I count **logged-in users who made at least one modification since their current login**. A user who modified data and then logged out (or logged in again without modifying) is not counted. |
+| "Modifications per user" | All recorded modifications per user, including earlier sessions and earlier runs (the history is persistent). Sorted by user id, uppercase before lowercase. |
 | `STATS()` semantics | Reflects **exactly** the commands entered before it. Every worker first finishes its earlier commands and then waits at a `CyclicBarrier`. The last worker to arrive runs the query while the others are paused, then all continue. Commands entered after `STATS()` are not included. The reader is never blocked. |
 | `EXIT()` / end of input | End of input (Ctrl+D, end of a piped file) behaves exactly like `EXIT()`. Lines after `EXIT()` are ignored. All already queued commands are still processed (30 s timeout), then the database is closed. |
 | Output order | Output is asynchronous. With piped input, `Shutting down...` may appear before the output of earlier commands, because reading finishes first. No command is lost. |

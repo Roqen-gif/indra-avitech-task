@@ -26,6 +26,11 @@ public final class ConsoleApp {
 
   private static final Logger LOG = Logger.getLogger(ConsoleApp.class.getName());
 
+  /** Short help shown when the application starts. */
+  public static final String USAGE =
+      "Commands: LOGIN(user_id), LOGOUT(user_id), DATA_MODIFY(user_id), STATS(), EXIT()."
+          + " Ctrl+D also exits.";
+
   private final BufferedReader input;
   private final PrintStream output;
   private final CommandParser parser;
@@ -110,6 +115,9 @@ public final class ConsoleApp {
   static String format(UserStats stats) {
     StringBuilder text = new StringBuilder();
     text.append("Logged-in users: ").append(stats.loggedInUsers()).append(System.lineSeparator());
+    text.append("Users currently modifying data: ")
+        .append(stats.usersModifyingData())
+        .append(System.lineSeparator());
     text.append("Modifications per user:").append(System.lineSeparator());
     if (stats.modificationsPerUser().isEmpty()) {
       text.append("  (none)").append(System.lineSeparator());

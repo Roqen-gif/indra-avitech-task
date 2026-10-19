@@ -60,7 +60,7 @@ class UserServiceTest {
     Outcome outcome = service.modifyData("bob");
 
     assertFalse(outcome.accepted());
-    assertEquals(UserStats.of(0, Map.of()), service.stats());
+    assertEquals(UserStats.of(0, 0, Map.of()), service.stats());
   }
 
   @Test
@@ -71,7 +71,7 @@ class UserServiceTest {
       assertTrue(service.modifyData("alice").accepted());
     }
 
-    assertEquals(UserStats.of(1, Map.of("alice", 3L)), service.stats());
+    assertEquals(UserStats.of(1, 1, Map.of("alice", 3L)), service.stats());
   }
 
   @Test
@@ -81,7 +81,7 @@ class UserServiceTest {
     service.logout("alice");
 
     assertFalse(service.modifyData("alice").accepted());
-    assertEquals(UserStats.of(0, Map.of("alice", 1L)), service.stats());
+    assertEquals(UserStats.of(0, 0, Map.of("alice", 1L)), service.stats());
   }
 
   @Test
@@ -92,7 +92,7 @@ class UserServiceTest {
     service.modifyData("bob");
     service.login("alice");
 
-    assertEquals(UserStats.of(1, Map.of("alice", 2L)), service.stats());
+    assertEquals(UserStats.of(1, 1, Map.of("alice", 2L)), service.stats());
   }
 
   @Test
@@ -102,7 +102,7 @@ class UserServiceTest {
 
     service.resetSessions();
 
-    assertEquals(UserStats.of(0, Map.of("alice", 1L)), service.stats());
+    assertEquals(UserStats.of(0, 0, Map.of("alice", 1L)), service.stats());
     assertTrue(service.login("alice").accepted());
   }
 }

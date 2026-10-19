@@ -147,7 +147,7 @@ class ConcurrencyTest {
     for (int user = 0; user < USERS; user++) {
       perUser.put(userId(user), (long) MODIFICATIONS_PER_USER);
     }
-    return UserStats.of(USERS, perUser);
+    return UserStats.of(USERS, USERS, perUser);
   }
 
   private static String userId(int index) {

@@ -27,6 +27,10 @@ public final class JdbcUserRepository implements UserRepository {
       "INSERT INTO data_modifications (user_id, modified_at)"
           + " SELECT user_id, ? FROM sessions WHERE user_id = ?";
   private static final String COUNT_SESSIONS = "SELECT COUNT(*) FROM sessions";
+  private static final String COUNT_USERS_MODIFYING_DATA =
+      "SELECT COUNT(DISTINCT s.user_id) FROM sessions s"
+          + " JOIN data_modifications m ON m.user_id = s.user_id"
+          + " WHERE m.modified_at >= s.logged_in_at";
   private static final String COUNT_MODIFICATIONS =
       "SELECT user_id, COUNT(*) FROM data_modifications GROUP BY user_id";
 
@@ -93,7 +97,11 @@ public final class JdbcUserRepository implements UserRepository {
       connection.setAutoCommit(false);
       connection.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
       try {
-        UserStats stats = UserStats.of(countSessions(connection), countModifications(connection));
+        UserStats stats =
+            UserStats.of(
+                count(connection, COUNT_SESSIONS),
+                count(connection, COUNT_USERS_MODIFYING_DATA),
+                countModifications(connection));
         connection.commit();
         return stats;
       } catch (SQLException e) {
@@ -105,8 +113,8 @@ public final class JdbcUserRepository implements UserRepository {
     }
   }
 
-  private static long countSessions(Connection connection) throws SQLException {
-    try (PreparedStatement statement = connection.prepareStatement(COUNT_SESSIONS);
+  private static long count(Connection connection, String sql) throws SQLException {
+    try (PreparedStatement statement = connection.prepareStatement(sql);
         ResultSet resultSet = statement.executeQuery()) {
       resultSet.next();
       return resultSet.getLong(1);
