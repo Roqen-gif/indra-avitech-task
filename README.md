@@ -19,8 +19,11 @@ Example session:
 $ java -jar target/user-sessions-1.0.0.jar
 Commands: LOGIN(user_id), LOGOUT(user_id), DATA_MODIFY(user_id), STATS(), EXIT(). Ctrl+D also exits.
 LOGIN(alice)
+OK: alice logged in
 DATA_MODIFY(alice)
+OK: modification recorded for alice
 DATA_MODIFY(alice)
+OK: modification recorded for alice
 DATA_MODIFY(bob)
 WARN: modification ignored, bob is not logged in
 LOGIN(alice)
@@ -48,7 +51,7 @@ One command per line, in the form `NAME(argument)`.
 | `STATS()` | prints the number of logged-in users, the number of users currently modifying data, and modifications per user | — |
 | `EXIT()` | processes all queued commands, closes resources and exits | — |
 
-Successful commands print nothing. Rejected commands and invalid input print a `WARN:` line and the application keeps running. A one-line usage hint is printed to standard error on start, so it is visible in a terminal but never mixes into redirected output.
+Each processed command prints a confirmation (`OK: …`) or a rejection (`WARN: …`). Invalid input also prints a `WARN:` line, and the application keeps running. A one-line usage hint is printed to standard error on start, so it is visible in a terminal but never mixes into redirected output.
 
 ## Architecture
 
@@ -89,7 +92,7 @@ STDIN ─► ConsoleApp ─► CommandParser ─► CommandDispatcher ─► Use
 | "Modifications per user" | All recorded modifications per user, including earlier sessions and earlier runs (the history is persistent). Sorted by user id, uppercase before lowercase. |
 | `STATS()` semantics | Reflects **exactly** the commands entered before it. Every worker first finishes its earlier commands and then waits at a `CyclicBarrier`. The last worker to arrive runs the query while the others are paused, then all continue. Commands entered after `STATS()` are not included. The reader is never blocked. |
 | `EXIT()` / end of input / Ctrl+C | End of input (Ctrl+D, end of a piped file) behaves exactly like `EXIT()`. Ctrl+C (SIGINT) also shuts down gracefully through a JVM shutdown hook. Lines after `EXIT()` are ignored. All already queued commands are still processed (30 s timeout), then the database is closed. |
-| Output order | Output is asynchronous. With piped input, `Shutting down...` may appear before the output of earlier commands, because reading finishes first. No command is lost. |
+| Output order | Output is asynchronous. Responses of one user always appear in command order; responses of different users may interleave, because they are processed in parallel. With piped input, `Shutting down...` may appear before the output of earlier commands, because reading finishes first. No command is lost. |
 | Sessions across restarts | Sessions are cleared on startup, because a session belongs to one run of the program. The modification history is persistent. |
 | Invalid input | Empty lines, unknown commands, missing parentheses, trailing characters, missing or unexpected arguments: a `WARN:` line is printed and processing continues. |
 

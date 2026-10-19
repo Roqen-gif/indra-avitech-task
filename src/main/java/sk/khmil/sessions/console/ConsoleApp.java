@@ -136,11 +136,7 @@ public final class ConsoleApp {
   }
 
   private void report(Outcome outcome) {
-    if (outcome.accepted()) {
-      LOG.fine(outcome.message());
-    } else {
-      output.println("WARN: " + outcome.message());
-    }
+    output.println((outcome.accepted() ? "OK: " : "WARN: ") + outcome.message());
   }
 
   /** Builds the whole block first so that concurrent output cannot interleave with it. */

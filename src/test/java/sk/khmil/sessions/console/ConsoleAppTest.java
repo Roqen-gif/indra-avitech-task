@@ -62,6 +62,9 @@ class ConsoleAppTest {
             EXIT()
             """);
 
+    assertTrue(output.contains("OK: alice logged in"), output);
+    assertEquals(
+        2, output.lines().filter("OK: modification recorded for alice"::equals).count(), output);
     assertTrue(output.contains("WARN: modification ignored, bob is not logged in"), output);
     assertTrue(output.contains("WARN: alice is already logged in"), output);
     assertTrue(output.contains("WARN: unknown command: FOO"), output);
