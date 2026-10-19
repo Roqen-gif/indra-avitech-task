@@ -1,5 +1,109 @@
-# Indra Avitech – User Sessions
+# User Sessions
 
-Console Java 21 application that reads commands from STDIN, processes them asynchronously and persists them to H2.
+A console application in plain Java 21 (no frameworks) that reads commands from standard input, processes them asynchronously and stores the results in an embedded H2 database.
 
-_Work in progress._
+## Build and run
+
+Requirements: JDK 21+ and Maven 3.9+.
+
+```bash
+mvn clean package                         # build, static analysis, tests, coverage gate
+java -jar target/user-sessions-1.0.0.jar  # run (data is stored in ./data/app.mv.db)
+```
+
+An optional first argument overrides the JDBC URL, e.g. `java -jar target/user-sessions-1.0.0.jar jdbc:h2:mem:demo`.
+
+Example session:
+
+```text
+$ java -jar target/user-sessions-1.0.0.jar
+LOGIN(alice)
+DATA_MODIFY(alice)
+DATA_MODIFY(alice)
+DATA_MODIFY(bob)
+WARN: modification ignored, bob is not logged in
+LOGIN(alice)
+WARN: alice is already logged in
+FOO(1)
+WARN: unknown command: FOO
+STATS()
+Logged-in users: 1
+Modifications per user:
+  alice: 2
+EXIT()
+Shutting down...
+```
+
+## Commands
+
+One command per line, in the form `NAME(argument)`.
+
+| Command | Effect | Rejected when |
+|---|---|---|
+| `LOGIN(user_id)` | starts a session | the user is already logged in |
+| `LOGOUT(user_id)` | ends the session | the user is not logged in |
+| `DATA_MODIFY(user_id)` | records one modification | the user is not logged in (ignored) |
+| `STATS()` | prints the number of logged-in users and modifications per user | — |
+| `EXIT()` | processes all queued commands, closes resources and exits | — |
+
+Successful commands print nothing. Rejected commands and invalid input print a `WARN:` line and the application keeps running.
+
+## Architecture
+
+```
+STDIN ─► ConsoleApp ─► CommandParser ─► CommandDispatcher ─► UserService ─► UserRepository ─► H2
+         (main thread: read + parse)    (N single-thread      (rules)        (JDBC)
+                                          workers)
+```
+
+| Package | Class | Responsibility |
+|---|---|---|
+| `command` | `Command`, `ParseResult`, `CommandParser` | sealed command model; parsing that never throws |
+| `dispatch` | `CommandDispatcher` | all concurrency: workers, per-user ordering, snapshots, shutdown |
+| `user` | `UserService`, `UserRepository`, `UserStats`, `Outcome` | business rules and the storage contract |
+| `persistence` | `Database`, `JdbcUserRepository` | schema, connections, SQL |
+| `console` | `ConsoleApp` | the read loop and output formatting |
+| — | `Main` | wires everything together by hand |
+
+### Concurrency model
+
+- **Asynchronous processing.** The main thread only reads and parses. Each command is handed to a worker and reading continues immediately.
+- **Per-user ordering.** There are N single-thread executors (N = available processors). A user's commands always go to worker `Math.floorMod(userId.hashCode(), N)`, so they run in the order they were entered. Commands of different users run in parallel.
+- **Atomicity in the database.** The database is the single source of truth for sessions:
+  - a duplicate `LOGIN` is detected by the primary key on `sessions.user_id`, not by a check-then-insert;
+  - `DATA_MODIFY` is one `INSERT … SELECT … FROM sessions WHERE user_id = ?`, so the "is logged in" check and the insert cannot be separated.
+
+  The business logic is therefore correct even without the ordering guarantee.
+- **Connections.** Each database operation opens its own connection with try-with-resources. Connections are never shared between threads.
+- **Failure isolation.** Every task is wrapped in a try/catch that logs the error, so one failing command never stops a worker.
+
+## Decisions on ambiguous points
+
+| Question | Decision |
+|---|---|
+| Case sensitivity | Command names are case-insensitive (`login(alice)` works). User ids are case-sensitive (`alice` and `Alice` are different users). |
+| Valid user id | Any non-empty text without whitespace or parentheses. Whitespace around the argument is trimmed. |
+| `STATS()` semantics | Reflects **exactly** the commands entered before it. Every worker first finishes its earlier commands and then waits at a `CyclicBarrier`. The last worker to arrive runs the query while the others are paused, then all continue. Commands entered after `STATS()` are not included. The reader is never blocked. |
+| `EXIT()` / end of input | End of input (Ctrl+D, end of a piped file) behaves exactly like `EXIT()`. Lines after `EXIT()` are ignored. All already queued commands are still processed (30 s timeout), then the database is closed. |
+| Output order | Output is asynchronous. With piped input, `Shutting down...` may appear before the output of earlier commands, because reading finishes first. No command is lost. |
+| Sessions across restarts | Sessions are cleared on startup, because a session belongs to one run of the program. The modification history is persistent. |
+| Invalid input | Empty lines, unknown commands, missing parentheses, trailing characters, missing or unexpected arguments: a `WARN:` line is printed and processing continues. |
+
+## Quality checks
+
+`mvn clean package` fails if any of these fail:
+
+- **Compiler:** `-Xlint:all -Werror` (no warnings allowed).
+- **[Error Prone](https://errorprone.info):** static analysis for common Java bugs.
+- **[Spotless](https://github.com/diffplug/spotless):** google-java-format formatting check (`mvn spotless:apply` reformats the code).
+- **JUnit 5 tests:** H2 in-memory database. Concurrency tests synchronize with latches (never `Thread.sleep`), and every one has a `@Timeout`.
+- **JaCoCo:** at least 80% line coverage. The report is in `target/site/jacoco/index.html`.
+
+| Test class | Covers |
+|---|---|
+| `CommandParserTest` | valid and invalid lines (parameterized); invalid input never throws |
+| `JdbcUserRepositoryTest` | SQL behaviour, primary-key handling, statistics, error wrapping |
+| `UserServiceTest` | business rules, including the example session |
+| `CommandDispatcherTest` | per-key ordering, failure isolation, `STATS` snapshot, graceful shutdown |
+| `ConcurrencyTest` | 50 simultaneous logins of one user → exactly one wins; 10 users × 100 modifications → exactly 1000 rows |
+| `ConsoleAppTest` | end-to-end scripts via an in-memory reader: example session, EOF, invalid lines |
