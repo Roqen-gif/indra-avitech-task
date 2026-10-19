@@ -6,6 +6,8 @@ import java.io.PrintStream;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import sk.khmil.sessions.command.Command;
@@ -37,6 +39,7 @@ public final class ConsoleApp {
   private final UserService userService;
   private final CommandDispatcher dispatcher;
   private final Duration shutdownTimeout;
+  private final AtomicBoolean stopped = new AtomicBoolean();
 
   public ConsoleApp(
       BufferedReader input,
@@ -62,17 +65,46 @@ public final class ConsoleApp {
     try {
       readUntilExit();
     } finally {
-      output.println("Shutting down...");
-      if (!dispatcher.shutdown(shutdownTimeout)) {
-        LOG.warning("Some commands were not processed before the shutdown timeout");
-      }
+      stop(false);
+    }
+  }
+
+  /**
+   * Graceful stop requested from outside, e.g. by a shutdown hook on Ctrl+C: commands already
+   * queued are still processed. Safe to call from any thread and more than once.
+   */
+  public void stopFromSignal() {
+    stop(true);
+  }
+
+  /** Shuts the dispatcher down exactly once, whichever thread gets here first. */
+  private void stop(boolean fromSignal) {
+    if (!stopped.compareAndSet(false, true)) {
+      return;
+    }
+    if (fromSignal) {
+      output.println();
+    }
+    output.println("Shutting down...");
+    if (!dispatcher.shutdown(shutdownTimeout)) {
+      LOG.warning("Some commands were not processed before the shutdown timeout");
     }
   }
 
   private void readUntilExit() {
     String line;
-    while ((line = readLine()) != null && process(line)) {
+    while (!stopped.get() && (line = readLine()) != null && processUnlessStopped(line)) {
       // process() does all the work; the loop only decides when to stop.
+    }
+  }
+
+  /** A stop signal can arrive between reading a line and dispatching it; then just stop reading. */
+  private boolean processUnlessStopped(String line) {
+    try {
+      return process(line);
+    } catch (RejectedExecutionException e) {
+      LOG.fine("Ignoring input received during shutdown: " + line);
+      return false;
     }
   }
 

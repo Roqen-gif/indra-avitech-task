@@ -30,7 +30,8 @@ public final class Main {
     String databaseUrl = args.length > 0 ? args[0] : DEFAULT_DATABASE_URL;
     int workerCount = Runtime.getRuntime().availableProcessors();
 
-    try (Database database = Database.open(databaseUrl)) {
+    Database database = Database.open(databaseUrl);
+    try {
       UserService userService =
           new UserService(new JdbcUserRepository(database, Clock.systemUTC()));
       userService.resetSessions();
@@ -44,8 +45,21 @@ public final class Main {
               userService,
               new CommandDispatcher(workerCount),
               SHUTDOWN_TIMEOUT);
+      // Ctrl+C: the JVM runs shutdown hooks but never returns to this method, so the hook
+      // repeats the graceful shutdown. Both calls are idempotent, so on a normal EXIT() it is
+      // a no-op.
+      Runtime.getRuntime()
+          .addShutdownHook(
+              new Thread(
+                  () -> {
+                    app.stopFromSignal();
+                    database.close();
+                  },
+                  "shutdown-hook"));
       System.err.println(ConsoleApp.USAGE);
       app.run();
+    } finally {
+      database.close();
     }
   }
 }

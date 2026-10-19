@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PipedReader;
+import java.io.PipedWriter;
 import java.io.PrintStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
@@ -139,6 +141,32 @@ class ConsoleAppTest {
         .run();
 
     assertEquals("Shutting down..." + NL, bytes.toString(StandardCharsets.UTF_8));
+  }
+
+  @Test
+  void stopFromSignalShutsDownOnceAndIgnoresLaterInput() throws Exception {
+    PipedWriter keyboard = new PipedWriter();
+    BufferedReader input = new BufferedReader(new PipedReader(keyboard));
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    ConsoleApp app =
+        new ConsoleApp(
+            input,
+            new PrintStream(bytes, true, StandardCharsets.UTF_8),
+            new CommandParser(),
+            userService,
+            new CommandDispatcher(2),
+            Duration.ofSeconds(5));
+    Thread reader = new Thread(app::run, "test-reader");
+    reader.start();
+
+    app.stopFromSignal();
+    app.stopFromSignal();
+    keyboard.write("LOGIN(alice)\n");
+    keyboard.close();
+    reader.join();
+
+    assertEquals(NL + "Shutting down..." + NL, bytes.toString(StandardCharsets.UTF_8));
+    assertEquals(0, userService.stats().loggedInUsers());
   }
 
   @Test

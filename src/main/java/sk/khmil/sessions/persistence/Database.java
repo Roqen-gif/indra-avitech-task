@@ -81,10 +81,10 @@ public final class Database implements AutoCloseable {
 
   /**
    * Shuts the embedded database down so all data is flushed before the process exits. Calling it
-   * again has no effect.
+   * again has no effect. Synchronized because both the main thread and a shutdown hook may call it.
    */
   @Override
-  public void close() {
+  public synchronized void close() {
     try {
       if (keepAlive.isClosed()) {
         return;
