@@ -4,7 +4,7 @@ A console application in plain Java 21 (no frameworks) that reads commands from 
 
 ## Build and run
 
-Requirements: JDK 21+ and Maven 3.9+.
+Requirements: JDK 21 or newer (verified on 21 and 27) and Maven 3.9+.
 
 ```bash
 mvn clean package                         # build, static analysis, tests, coverage gate
@@ -74,7 +74,7 @@ STDIN ─► ConsoleApp ─► CommandParser ─► CommandDispatcher ─► Use
   - `DATA_MODIFY` is one `INSERT … SELECT … FROM sessions WHERE user_id = ?`, so the "is logged in" check and the insert cannot be separated.
 
   The business logic is therefore correct even without the ordering guarantee.
-- **Connections.** Each database operation opens its own connection with try-with-resources. Connections are never shared between threads.
+- **Connections.** Each database operation opens its own connection with try-with-resources. Connections are never shared between threads. `Database` also holds one idle connection for its whole lifetime. An embedded H2 database closes when its last connection closes, so without it the file would be reopened on almost every operation (about 3.5× slower).
 - **Failure isolation.** Every task is wrapped in a try/catch that logs the error, so one failing command never stops a worker.
 
 ## Decisions on ambiguous points

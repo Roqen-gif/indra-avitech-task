@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
@@ -108,6 +109,29 @@ class ConsoleAppTest {
 
     assertTrue(output.contains("Logged-in users: 20" + NL), output);
     assertFalse(output.contains("WARN"), output);
+  }
+
+  @Test
+  void readFailureShutsDownGracefully() {
+    BufferedReader failing =
+        new BufferedReader(new StringReader("")) {
+          @Override
+          public String readLine() throws IOException {
+            throw new IOException("stream closed");
+          }
+        };
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+
+    new ConsoleApp(
+            failing,
+            new PrintStream(bytes, true, StandardCharsets.UTF_8),
+            new CommandParser(),
+            userService,
+            new CommandDispatcher(2),
+            Duration.ofSeconds(5))
+        .run();
+
+    assertEquals("Shutting down..." + NL, bytes.toString(StandardCharsets.UTF_8));
   }
 
   @Test

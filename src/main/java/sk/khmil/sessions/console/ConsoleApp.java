@@ -48,36 +48,46 @@ public final class ConsoleApp {
     this.shutdownTimeout = Objects.requireNonNull(shutdownTimeout, "shutdownTimeout");
   }
 
-  /** Processes input until {@code EXIT()} or end of input, then waits for queued commands. */
+  /**
+   * Processes input until {@code EXIT()} or end of input, then waits for queued commands. The
+   * dispatcher is shut down even if reading fails unexpectedly, so its threads never keep the JVM
+   * alive.
+   */
   public void run() {
-    readUntilExit();
-    output.println("Shutting down...");
-    if (!dispatcher.shutdown(shutdownTimeout)) {
-      LOG.warning("Some commands were not processed before the shutdown timeout");
+    try {
+      readUntilExit();
+    } finally {
+      output.println("Shutting down...");
+      if (!dispatcher.shutdown(shutdownTimeout)) {
+        LOG.warning("Some commands were not processed before the shutdown timeout");
+      }
     }
   }
 
   private void readUntilExit() {
     String line;
-    while ((line = readLine()) != null) {
-      switch (parser.parse(line)) {
-        case ParseResult.Failure failure -> output.println("WARN: " + failure.reason());
-        case ParseResult.Success(Command.Exit exit) -> {
-          return;
-        }
-        case ParseResult.Success(Command command) -> submit(command);
-      }
+    while ((line = readLine()) != null && process(line)) {
+      // process() does all the work; the loop only decides when to stop.
     }
   }
 
-  private void submit(Command command) {
-    switch (command) {
-      case Command.UserCommand userCommand ->
-          dispatcher.dispatch(userCommand.userId(), () -> report(execute(userCommand)));
-      case Command.Stats stats ->
-          dispatcher.runExclusively(() -> output.print(format(userService.stats())));
-      case Command.Exit exit -> throw new IllegalStateException("EXIT is handled by the reader");
-    }
+  /** Handles one line without waiting for its result; returns {@code false} on {@code EXIT()}. */
+  private boolean process(String line) {
+    return switch (parser.parse(line)) {
+      case ParseResult.Failure failure -> {
+        output.println("WARN: " + failure.reason());
+        yield true;
+      }
+      case ParseResult.Success(Command.UserCommand command) -> {
+        dispatcher.dispatch(command.userId(), () -> report(execute(command)));
+        yield true;
+      }
+      case ParseResult.Success(Command.Stats stats) -> {
+        dispatcher.runExclusively(() -> output.print(format(userService.stats())));
+        yield true;
+      }
+      case ParseResult.Success(Command.Exit exit) -> false;
+    };
   }
 
   private Outcome execute(Command.UserCommand command) {
